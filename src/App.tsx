@@ -3,6 +3,7 @@ import { Sun, Moon, MapPin, ChevronDown, ChevronUp } from "lucide-react";
 import AuroraForecast from "./components/AuroraForecast";
 import AdvancedInfo from "./components/AdvancedInfo";
 import ViewingLocations from "./components/ViewingLocations";
+import LocationSearch from "./components/LocationSearch";
 import {
   fetchAuroraData,
   fetchWeatherData,
@@ -23,6 +24,32 @@ function App() {
   const [showAdvanced, setShowAdvanced] = useState<boolean>(false);
   const [viewingLocations, setViewingLocations] = useState<string[]>([]);
   const [error, setError] = useState<string | null>(null);
+  const [showLocationSearch, setShowLocationSearch] = useState(false);
+
+  const handleLocationSelect = (newLocation: {
+    lat: number;
+    lon: number;
+    name: string;
+  }) => {
+    setLocation(newLocation);
+    setShowLocationSearch(false);
+  };
+
+  const handleUseCurrentLocation = () => {
+    navigator.geolocation.getCurrentPosition(
+      (position) => {
+        const { latitude, longitude } = position.coords;
+        setLocation({ lat: latitude, lon: longitude, name: "Loading..." });
+        setShowLocationSearch(false);
+      },
+      (error) => {
+        console.error("Error getting location:", error);
+        setError(
+          "Couldn't get your location. Please enter a location manually."
+        );
+      }
+    );
+  };
 
   useEffect(() => {
     navigator.geolocation.getCurrentPosition(
@@ -114,10 +141,18 @@ function App() {
 
       <main className="container mx-auto px-4 py-8">
         <div className="bg-indigo-800 bg-opacity-50 rounded-lg p-6 mb-8">
-          <h2 className="text-xl mb-4 flex items-center">
-            <MapPin className="w-5 h-5 mr-2" />
-            {location ? location.name : "Loading location..."}
-          </h2>
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="text-xl flex items-center">
+              <MapPin className="w-5 h-5 mr-2" />
+              {location ? location.name : "Loading location..."}
+            </h2>
+            <button
+              onClick={() => setShowLocationSearch(true)}
+              className="bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2 px-4 rounded"
+            >
+              Change Location
+            </button>
+          </div>
           <div className="text-4xl font-bold mb-4">
             {auroraChance}% chance of aurora tonight
           </div>
@@ -128,11 +163,12 @@ function App() {
           </p>
         </div>
 
-        <ViewingLocations
-          locations={viewingLocations}
-          auroraChance={auroraChance}
+        <ViewingLocations location={location} auroraChance={auroraChance} />
+        <AuroraForecast
+          auroraData={auroraData}
+          weatherData={weatherData}
+          location={location}
         />
-        <AuroraForecast auroraData={auroraData} weatherData={weatherData} />
 
         <div className="mt-8">
           <button
@@ -148,6 +184,14 @@ function App() {
           </button>
           {showAdvanced && <AdvancedInfo auroraData={auroraData} />}
         </div>
+
+        {showLocationSearch && (
+          <LocationSearch
+            onLocationSelect={handleLocationSelect}
+            onUseCurrentLocation={handleUseCurrentLocation}
+            onClose={() => setShowLocationSearch(false)}
+          />
+        )}
       </main>
 
       <footer className="text-center p-4 text-sm">

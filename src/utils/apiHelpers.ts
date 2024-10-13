@@ -7,11 +7,48 @@ const OPENWEATHERMAP_API_URL =
 const OPENWEATHERMAP_API_KEY = "4103fb80c1acdb68060bf9589985ce53"; // Replace with your actual API key
 const GEOCODING_API_URL = "https://api.openweathermap.org/geo/1.0/reverse";
 const ELEVATION_API_URL = "https://api.opentopodata.org/v1/aster30m";
+const DIRECT_GEOCODING_API_URL =
+  "https://api.openweathermap.org/geo/1.0/direct";
+
+const NOAA_KP_INDEX_URL =
+  "https://services.swpc.noaa.gov/products/noaa-planetary-k-index.json";
+const NOAA_MAG_URL =
+  "https://services.swpc.noaa.gov/products/solar-wind/mag-1-day.json";
+const NOAA_PLASMA_URL =
+  "https://services.swpc.noaa.gov/products/solar-wind/plasma-1-day.json";
+const NOAA_GEOSPACE_URL =
+  "https://services.swpc.noaa.gov/products/geospace-1-day.json";
 
 export async function fetchAuroraData() {
   try {
-    const response = await axios.get(NOAA_API_URL);
-    return response.data;
+    const [auroraResponse, kpIndexResponse, magResponse, plasmaResponse] =
+      await Promise.all([
+        axios.get(NOAA_API_URL),
+        axios.get(NOAA_KP_INDEX_URL),
+        axios.get(NOAA_MAG_URL),
+        axios.get(NOAA_PLASMA_URL),
+      ]);
+
+    const kpIndexData = kpIndexResponse.data;
+    const latestKpIndex = kpIndexData[kpIndexData.length - 1];
+
+    const magData = magResponse.data;
+    const latestMagData = magData[magData.length - 1];
+
+    const plasmaData = plasmaResponse.data;
+    const latestPlasmaData = plasmaData[plasmaData.length - 1];
+
+    return {
+      observationTime: auroraResponse.data["Observation Time"],
+      forecastTime: auroraResponse.data["Forecast Time"],
+      coordinates: auroraResponse.data.coordinates,
+      kpIndex: latestKpIndex[1] || "N/A",
+      kpTimestamp: latestKpIndex[0] || "N/A",
+      hemiPower: auroraResponse.data["Hemisphere Power"] || "N/A",
+      bz: latestMagData[3] || "N/A", // Bz component from mag-1-day.json
+      solarWindSpeed: latestPlasmaData[1] || "N/A", // Solar wind speed from plasma-1-day.json
+      solarWindDensity: latestPlasmaData[2] || "N/A", // Solar wind density from plasma-1-day.json
+    };
   } catch (error) {
     console.error("Error fetching aurora data:", error);
     throw new Error("Failed to fetch aurora data");
@@ -41,18 +78,35 @@ export function calculateAuroraChance(
 ): number {
   if (!auroraData || !weatherData) return 0;
 
+  const lat = weatherData.city?.coord?.lat || 0;
+  const lon = weatherData.city?.coord?.lon || 0;
+
+  // Find the closest aurora data point
+  const closestPoint = auroraData.coordinates.reduce(
+    (closest: any, point: any) => {
+      const [pointLon, pointLat, auroraValue] = point;
+      const distance = Math.sqrt(
+        Math.pow(pointLat - lat, 2) + Math.pow(pointLon - lon, 2)
+      );
+      return distance < closest.distance
+        ? { lat: pointLat, lon: pointLon, aurora: auroraValue, distance }
+        : closest;
+    },
+    { distance: Infinity }
+  );
+
   // Extract relevant data
-  const kpIndex = auroraData.coordinates[0]?.Kp || 0;
+  const auroraIntensity = closestPoint.aurora || 0;
   const cloudCover = weatherData.list[0]?.clouds?.all || 0; // Cloud coverage percentage
 
-  // Calculate base chance based on Kp index
-  let chance = kpIndex * 10; // 0-90% chance based on Kp index (0-9)
+  // Calculate base chance based on aurora intensity
+  let chance = Math.min(auroraIntensity * 10, 100); // Multiply by 10 to scale 0-10 to 0-100
 
   // Adjust for cloud cover
   chance *= (100 - cloudCover) / 100;
 
   // Adjust for latitude (higher latitudes have better chances)
-  const latitude = Math.abs(weatherData.city?.coord?.lat || 0);
+  const latitude = Math.abs(lat);
   if (latitude > 60) chance *= 1.2;
   else if (latitude > 50) chance *= 1.1;
   else if (latitude < 40) chance *= 0.8;
@@ -96,14 +150,17 @@ export async function getViewingLocations(
 }
 
 async function getNearbyLocations(lat: number, lon: number) {
-  const response = await axios.get(GEOCODING_API_URL, {
-    params: {
-      lat,
-      lon,
-      limit: 20, // Get 20 nearby locations
-      appid: OPENWEATHERMAP_API_KEY,
-    },
-  });
+  const response = await axios.get(
+    "https://api.openweathermap.org/geo/1.0/reverse",
+    {
+      params: {
+        lat,
+        lon,
+        limit: 20, // Get 20 nearby locations
+        appid: OPENWEATHERMAP_API_KEY,
+      },
+    }
+  );
 
   return response.data.map((location: any) => ({
     name: location.name,
@@ -173,4 +230,20 @@ function calculateDirection(
   const bearing = ((Math.atan2(y, x) * 180) / Math.PI + 360) % 360;
   const directions = ["N", "NE", "E", "SE", "S", "SW", "W", "NW"];
   return directions[Math.round(bearing / 45) % 8];
+}
+
+export async function fetchLocationSuggestions(searchTerm: string) {
+  try {
+    const response = await axios.get(DIRECT_GEOCODING_API_URL, {
+      params: {
+        q: searchTerm,
+        limit: 5,
+        appid: OPENWEATHERMAP_API_KEY,
+      },
+    });
+    return response.data;
+  } catch (error) {
+    console.error("Error fetching location suggestions:", error);
+    throw new Error("Failed to fetch location suggestions");
+  }
 }

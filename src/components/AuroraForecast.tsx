@@ -1,26 +1,54 @@
-import React from "react";
+import React, { useEffect, useState } from "react";
 import { Sun, Cloud, CloudRain, Droplets } from "lucide-react";
 import { calculateAuroraChance } from "../utils/apiHelpers";
 
 interface AuroraForecastProps {
-  auroraData: any;
-  weatherData: any;
+  auroraData: {
+    observationTime: string;
+    forecastTime: string;
+    coordinates: [number, number, number][];
+  } | null;
+  weatherData: {
+    list: any[];
+    city: {
+      coord: { lat: number; lon: number };
+      name: string;
+    };
+  } | null;
+  location: { lat: number; lon: number; name: string } | null;
+}
+
+interface ForecastDay {
+  day: string;
+  chance: number;
+  weather: string;
+  temp: number;
 }
 
 const AuroraForecast: React.FC<AuroraForecastProps> = ({
   auroraData,
   weatherData,
+  location,
 }) => {
-  const getForecast = () => {
-    if (!auroraData || !weatherData) return [];
+  const [forecast, setForecast] = useState<ForecastDay[]>([]);
+
+  useEffect(() => {
+    if (auroraData && weatherData && location) {
+      const newForecast = getForecast();
+      setForecast(newForecast);
+    }
+  }, [auroraData, weatherData, location]);
+
+  const getForecast = (): ForecastDay[] => {
+    if (!weatherData || !auroraData) return [];
 
     return weatherData.list
-      .filter((_: any, index: number) => index % 8 === 0)
+      .filter((_, index) => index % 8 === 0)
       .slice(0, 5)
-      .map((day: any, index: number) => {
+      .map((day, index) => {
         const chance = calculateAuroraChance(auroraData, {
+          ...weatherData,
           list: [day],
-          city: weatherData.city,
         });
         return {
           day:
@@ -35,8 +63,6 @@ const AuroraForecast: React.FC<AuroraForecastProps> = ({
         };
       });
   };
-
-  const forecast = getForecast();
 
   const getWeatherIcon = (weather: string) => {
     switch (weather) {
@@ -56,7 +82,9 @@ const AuroraForecast: React.FC<AuroraForecastProps> = ({
 
   return (
     <div className="bg-indigo-800 bg-opacity-50 rounded-lg p-4 mb-8">
-      <h3 className="text-xl mb-4">5-Day Aurora Forecast</h3>
+      <h3 className="text-xl mb-4">
+        5-Day Aurora Forecast for {location?.name}
+      </h3>
       <div className="grid grid-cols-5 gap-4">
         {forecast.map((day) => (
           <div

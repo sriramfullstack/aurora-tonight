@@ -19,8 +19,12 @@ const AdvancedInfo: React.FC<AdvancedInfoProps> = ({ auroraData }) => {
     );
   }
 
-  const { Kp, Bz, solarWindSpeed, solarWindDensity } =
-    auroraData.coordinates[0] || {};
+  const {
+    kpIndex: Kp,
+    bz: Bz,
+    solarWindSpeed,
+    solarWindDensity,
+  } = auroraData || {};
 
   const InfoCard = ({
     title,

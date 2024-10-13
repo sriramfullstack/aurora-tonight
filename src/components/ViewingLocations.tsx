@@ -1,15 +1,24 @@
-import React from "react";
+import React, { useEffect, useState } from "react";
 import { MapPin } from "lucide-react";
+import { getViewingLocations } from "../utils/apiHelpers";
 
 interface ViewingLocationsProps {
-  locations: string[];
+  location: { lat: number; lon: number; name: string } | null;
   auroraChance: number;
 }
 
 const ViewingLocations: React.FC<ViewingLocationsProps> = ({
-  locations = [],
+  location,
   auroraChance,
 }) => {
+  const [locations, setLocations] = useState<string[]>([]);
+
+  useEffect(() => {
+    if (location) {
+      getViewingLocations(location.lat, location.lon).then(setLocations);
+    }
+  }, [location]);
+
   return (
     <div className="bg-indigo-800 bg-opacity-50 rounded-lg p-4 mb-8">
       <h3 className="text-xl mb-2">Best Viewing Locations</h3>
